@@ -62,7 +62,13 @@ public class Subscription extends BaseEntity {
   @Column(name = "end_date")
   private LocalDateTime endDate;
 
+  @Column(name = "user_id")
+  private Long userId;
+
+  @Column(name = "phone_number", nullable = false)
+  private String phoneNumber;
+
   public void addSubscriptionTime() {
-    this.endDate = this.endDate.plusDays(30);
+    this.paymentDate = this.paymentDate.plusDays(30);
   }
 }

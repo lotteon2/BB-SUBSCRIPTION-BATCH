@@ -1,6 +1,6 @@
 package kr.bb.subscriptionbatch.mapper;
 
-import kr.bb.subscriptionbatch.dto.SubscriptionBatchDto;
+import bloomingblooms.domain.batch.SubscriptionBatchDto;
 import kr.bb.subscriptionbatch.entity.Subscription;
 
 public class SubscriptionMapper {
@@ -9,6 +9,7 @@ public class SubscriptionMapper {
         .cid(subscription.getSubscriptionCid())
         .sid(subscription.getSubscriptionSid())
         .partnerOrderId(subscription.getOrderSubscriptionId())
+        .partnerUserId(String.valueOf(subscription.getUserId()))
         .quantity(subscription.getSubscriptionQuantity())
         .totalAmount(subscription.getSubscriptionTotalAmount())
         .build();

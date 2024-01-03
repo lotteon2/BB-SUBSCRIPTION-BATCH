@@ -1,11 +1,10 @@
 package kr.bb.subscriptionbatch.batch;
 
+import bloomingblooms.domain.batch.SubscriptionBatchDto;
+import bloomingblooms.domain.batch.SubscriptionBatchDtoList;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import javax.persistence.EntityManagerFactory;
-import kr.bb.subscriptionbatch.dto.SubscriptionBatchDto;
 import kr.bb.subscriptionbatch.entity.Subscription;
 import kr.bb.subscriptionbatch.mapper.SubscriptionMapper;
 import kr.bb.subscriptionbatch.repository.SubscriptionRepository;
@@ -32,7 +31,7 @@ public class SubscriptionBatch {
   private final JobBuilderFactory jobBuilderFactory;
   private final StepBuilderFactory stepBuilderFactory;
   private final EntityManagerFactory emf;
-  private final KafkaTemplate<String, List<SubscriptionBatchDto>> kafkaTemplate;
+  private final KafkaTemplate<String, SubscriptionBatchDtoList> kafkaTemplate;
 //  private final KafkaTemplate<String, UserInfoForNotification>
 //      memberInfoForNotificationDtoKafkaProcessor;
   private int chunkSize = 500;
@@ -54,15 +53,11 @@ public class SubscriptionBatch {
 
   @Bean
   public JpaPagingItemReader<Subscription> subscriptionReader() {
-    Map<String, Object> params = new HashMap<>();
-    params.put("isDeleted", null);
-
     return new JpaPagingItemReaderBuilder<Subscription>()
         .name("subscriptionReader")
         .entityManagerFactory(emf)
         .pageSize(chunkSize)
-        .queryString("SELECT s FROM Subscription s WHERE s.isDeleted = :isDeleted")
-        .parameterValues(params)
+        .queryString("SELECT s FROM Subscription s WHERE s.isDeleted is null")
         .build();
   }
 
@@ -70,7 +65,8 @@ public class SubscriptionBatch {
   @StepScope
   public JpaItemWriter<Subscription> subscriptionWriter(
       @Value("#{jobParameters[date]}") String date) {
-    List<SubscriptionBatchDto> subscriptionBatchDtoList = new ArrayList<>();
+    System.out.println("date = " + date);
+    List<SubscriptionBatchDto> subscriptionBatchDtos = new ArrayList<>();
 
     JpaItemWriter<Subscription> jpaItemWriter =
         new JpaItemWriter<>() {
@@ -81,15 +77,18 @@ public class SubscriptionBatch {
                 subscriptionRepository.findSubscriptionsByPaymentDate(date);
             for (Subscription subscription : subscriptionList) {
               subscription.addSubscriptionTime();
-              subscriptionBatchDtoList.add(SubscriptionMapper.convertToDto(subscription));
+              subscriptionBatchDtos.add(SubscriptionMapper.convertToDto(subscription));
             }
 
+            SubscriptionBatchDtoList subscriptionBatchDtoList = SubscriptionBatchDtoList.builder()
+                    .subscriptionBatchDtoList(subscriptionBatchDtos)
+                    .build();
+
+            System.out.println("subscriptionList = " + subscriptionList);
             if (!subscriptionList.isEmpty()) {
               kafkaTemplate.send("subscription-batch", subscriptionBatchDtoList);
 
-              // TODO: SNS 로 배치 정기결제 알려주기
-
-
+              // TODO: SNS로 정기결제 발생 알려주기
 
             }
           }
