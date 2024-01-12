@@ -1,13 +1,11 @@
 package kr.bb.subscriptionbatch.batch;
 
-import bloomingblooms.domain.batch.SubscriptionBatchDto;
-import bloomingblooms.domain.batch.SubscriptionBatchDtoList;
 import java.util.ArrayList;
 import java.util.List;
 import javax.persistence.EntityManagerFactory;
-import kr.bb.subscriptionbatch.entity.Subscription;
-import kr.bb.subscriptionbatch.mapper.SubscriptionMapper;
-import kr.bb.subscriptionbatch.repository.SubscriptionRepository;
+import kr.bb.subscriptionbatch.dto.OrderSubscriptionBatchDto;
+import kr.bb.subscriptionbatch.entity.OrderSubscription;
+import kr.bb.subscriptionbatch.repository.OrderSubscriptionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
@@ -27,13 +25,11 @@ import org.springframework.kafka.core.KafkaTemplate;
 @Configuration
 @Slf4j
 public class SubscriptionBatch {
-  private final SubscriptionRepository subscriptionRepository;
+  private final OrderSubscriptionRepository orderSubscriptionRepository;
   private final JobBuilderFactory jobBuilderFactory;
   private final StepBuilderFactory stepBuilderFactory;
   private final EntityManagerFactory emf;
-  private final KafkaTemplate<String, SubscriptionBatchDtoList> kafkaTemplate;
-//  private final KafkaTemplate<String, UserInfoForNotification>
-//      memberInfoForNotificationDtoKafkaProcessor;
+  private final KafkaTemplate<String, OrderSubscriptionBatchDto> kafkaTemplate;
   private int chunkSize = 500;
 
   @Bean
@@ -45,51 +41,52 @@ public class SubscriptionBatch {
   public Step subscriptionStep() {
     return stepBuilderFactory
         .get("susbcriptionStep")
-        .<Subscription, Subscription>chunk(chunkSize)
+        .<OrderSubscription, OrderSubscription>chunk(chunkSize)
         .reader(subscriptionReader())
         .writer(subscriptionWriter(null))
         .build();
   }
 
   @Bean
-  public JpaPagingItemReader<Subscription> subscriptionReader() {
-    return new JpaPagingItemReaderBuilder<Subscription>()
+  public JpaPagingItemReader<OrderSubscription> subscriptionReader() {
+    return new JpaPagingItemReaderBuilder<OrderSubscription>()
         .name("subscriptionReader")
         .entityManagerFactory(emf)
         .pageSize(chunkSize)
-        .queryString("SELECT s FROM Subscription s WHERE s.isDeleted is null")
+        .queryString("SELECT os FROM OrderSubscription os WHERE os.isDeleted is false")
         .build();
   }
 
   @Bean
   @StepScope
-  public JpaItemWriter<Subscription> subscriptionWriter(
+  public JpaItemWriter<OrderSubscription> subscriptionWriter(
       @Value("#{jobParameters[date]}") String date) {
     System.out.println("date = " + date);
-    List<SubscriptionBatchDto> subscriptionBatchDtos = new ArrayList<>();
+    List<OrderSubscriptionBatchDto> subscriptionBatchDtos = new ArrayList<>();
 
-    JpaItemWriter<Subscription> jpaItemWriter =
-        new JpaItemWriter<>() {
+    JpaItemWriter<OrderSubscription> jpaItemWriter =
+        new JpaItemWriter<OrderSubscription>() {
 
           @Override
-          public void write(List<? extends Subscription> items) {
-            List<Subscription> subscriptionList =
-                subscriptionRepository.findSubscriptionsByPaymentDate(date);
-            for (Subscription subscription : subscriptionList) {
-              subscription.addSubscriptionTime();
-              subscriptionBatchDtos.add(SubscriptionMapper.convertToDto(subscription));
+          public void write(List<? extends OrderSubscription> items) {
+            List<OrderSubscription> orderSubscriptionList =
+                orderSubscriptionRepository.findAllByPaymentDate(date);
+
+            List<String> orderSubscriptionIds = new ArrayList<>();
+
+            for (OrderSubscription orderSubscription : orderSubscriptionList) {
+              orderSubscription.addTime();
+              orderSubscriptionIds.add(orderSubscription.getOrderSubscriptionId());
             }
 
-            SubscriptionBatchDtoList subscriptionBatchDtoList = SubscriptionBatchDtoList.builder()
-                    .subscriptionBatchDtoList(subscriptionBatchDtos)
+            OrderSubscriptionBatchDto subscriptionBatchDto =
+                OrderSubscriptionBatchDto.builder()
+                    .orderSubscriptionIds(orderSubscriptionIds)
                     .build();
 
-            System.out.println("subscriptionList = " + subscriptionList);
-            if (!subscriptionList.isEmpty()) {
-              kafkaTemplate.send("subscription-batch", subscriptionBatchDtoList);
-
-              // TODO: SNS로 정기결제 발생 알려주기
-
+            System.out.println("subscriptionList = " + subscriptionBatchDto);
+            if (!orderSubscriptionIds.isEmpty()) {
+              kafkaTemplate.send("subscription-batch", subscriptionBatchDto);
             }
           }
         };
