@@ -4,17 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 
-import bloomingblooms.domain.batch.SubscriptionBatchDto;
 import bloomingblooms.domain.batch.SubscriptionBatchDtoList;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import kr.bb.subscriptionbatch.entity.Subscription;
-import kr.bb.subscriptionbatch.mapper.SubscriptionMapper;
-import kr.bb.subscriptionbatch.repository.SubscriptionRepository;
+import kr.bb.subscriptionbatch.dto.OrderSubscriptionBatchDto;
+import kr.bb.subscriptionbatch.entity.OrderSubscription;
+import kr.bb.subscriptionbatch.repository.OrderSubscriptionRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.batch.core.BatchStatus;
@@ -32,12 +30,12 @@ import org.springframework.kafka.core.KafkaTemplate;
 @SpringBootTest
 public class SubscriptionBatchTest {
   @Autowired private JobLauncherTestUtils jobLauncherTestUtils;
-  @Autowired private SubscriptionRepository subscriptionRepository;
+  @Autowired private OrderSubscriptionRepository orderSubscriptionRepository;
   @MockBean private KafkaTemplate<String, SubscriptionBatchDtoList> kafkaTemplate;
 
   @AfterEach
   public void deleteData() {
-    subscriptionRepository.deleteAll();
+    orderSubscriptionRepository.deleteAll();
   }
 
   @Test
@@ -49,37 +47,35 @@ public class SubscriptionBatchTest {
         LocalDateTime.parse(
             "2023-12-31 19:12:00", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 
-    Subscription subscription =
-        Subscription.builder()
-            .orderSubscriptionId("임시구독주문id")
-            .subscriptionCid("TCSUBSCRIP")
-            .subscriptionTid("임시tid")
-            .subscriptionSid("임시sid")
-            .subscriptionQuantity(1L)
-            .subscriptionTotalAmount(45000L)
-            .paymentDate(paymentDate)
-            .startDate(startDate)
+    OrderSubscription orderSubscription =
+        OrderSubscription.builder()
+            .orderSubscriptionId("qwer")
             .userId(1L)
+            .subscriptionProductId("asdf")
+            .deliveryId(1L)
+            .productName("상품명")
+            .productPrice(45000L)
+            .deliveryDay(startDate.plusDays(3).toLocalDate())
             .phoneNumber("010-1111-1111")
+            .paymentDate(paymentDate)
             .build();
 
-    subscriptionRepository.save(subscription);
+    orderSubscriptionRepository.save(orderSubscription);
 
     JobParameters jobParameters =
         new JobParametersBuilder().addString("date", "20231231").toJobParameters();
 
-    SubscriptionBatchDto subscriptionBatchDto = SubscriptionMapper.convertToDto(subscription);
-
-    SubscriptionBatchDtoList subscriptionBatchDtoList =
-        SubscriptionBatchDtoList.builder()
-            .subscriptionBatchDtoList(List.of(subscriptionBatchDto))
+    List<String> orderSubscriptionIds = List.of(orderSubscription.getOrderSubscriptionId());
+    OrderSubscriptionBatchDto subscriptionBatchDto = OrderSubscriptionBatchDto.builder()
+            .orderSubscriptionIds(orderSubscriptionIds)
             .build();
+
     when(kafkaTemplate.send(eq("subscription-batch"), any(SubscriptionBatchDtoList.class))).thenReturn(null);
 
     JobExecution jobExecution = jobLauncherTestUtils.launchJob(jobParameters);
     assertThat(jobExecution.getStatus()).isEqualTo(BatchStatus.COMPLETED);
 
-    for (Subscription target : subscriptionRepository.findAll()) {
+    for (OrderSubscription target : orderSubscriptionRepository.findAll()) {
       assertEquals(target.getPaymentDate(), paymentDate.plusDays(30));
     }
   }
