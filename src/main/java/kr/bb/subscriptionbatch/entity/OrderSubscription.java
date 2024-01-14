@@ -3,6 +3,8 @@ package kr.bb.subscriptionbatch.entity;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
 import javax.persistence.Id;
 import javax.persistence.Table;
 import javax.validation.constraints.NotNull;
@@ -22,6 +24,11 @@ public class OrderSubscription extends BaseEntity {
   @Id private String orderSubscriptionId;
   @NotNull private Long userId;
   @NotNull private String subscriptionProductId;
+
+  @NotNull
+  @Enumerated(EnumType.STRING)
+  private SubscriptionStatus subscriptionStatus;
+
   @NotNull private Long deliveryId;
   @NotNull private String productName;
   @NotNull private Long productPrice;

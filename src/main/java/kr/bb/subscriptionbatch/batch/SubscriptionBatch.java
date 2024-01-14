@@ -1,9 +1,10 @@
 package kr.bb.subscriptionbatch.batch;
 
+import bloomingblooms.domain.batch.SubscriptionBatchDto;
+import bloomingblooms.domain.batch.SubscriptionBatchDtoList;
 import java.util.ArrayList;
 import java.util.List;
 import javax.persistence.EntityManagerFactory;
-import kr.bb.subscriptionbatch.dto.OrderSubscriptionBatchDto;
 import kr.bb.subscriptionbatch.entity.OrderSubscription;
 import kr.bb.subscriptionbatch.repository.OrderSubscriptionRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +30,7 @@ public class SubscriptionBatch {
   private final JobBuilderFactory jobBuilderFactory;
   private final StepBuilderFactory stepBuilderFactory;
   private final EntityManagerFactory emf;
-  private final KafkaTemplate<String, OrderSubscriptionBatchDto> kafkaTemplate;
+  private final KafkaTemplate<String, SubscriptionBatchDtoList> kafkaTemplate;
   private int chunkSize = 500;
 
   @Bean
@@ -53,7 +54,7 @@ public class SubscriptionBatch {
         .name("subscriptionReader")
         .entityManagerFactory(emf)
         .pageSize(chunkSize)
-        .queryString("SELECT os FROM OrderSubscription os WHERE os.isDeleted is false")
+        .queryString("SELECT os FROM OrderSubscription os WHERE os.subscriptionStatus = 'COMPLETED'")
         .build();
   }
 
@@ -61,8 +62,8 @@ public class SubscriptionBatch {
   @StepScope
   public JpaItemWriter<OrderSubscription> subscriptionWriter(
       @Value("#{jobParameters[date]}") String date) {
-    System.out.println("date = " + date);
-    List<OrderSubscriptionBatchDto> subscriptionBatchDtos = new ArrayList<>();
+    System.out.println("date is  = " + date);
+    List<SubscriptionBatchDto> subscriptionBatchDtos = new ArrayList<>();
 
     JpaItemWriter<OrderSubscription> jpaItemWriter =
         new JpaItemWriter<OrderSubscription>() {
@@ -77,16 +78,20 @@ public class SubscriptionBatch {
             for (OrderSubscription orderSubscription : orderSubscriptionList) {
               orderSubscription.addTime();
               orderSubscriptionIds.add(orderSubscription.getOrderSubscriptionId());
+              SubscriptionBatchDto subscriptionBatchDto = SubscriptionBatchDto.builder()
+                      .userId(orderSubscription.getUserId())
+                      .orderSubscriptionId(orderSubscription.getOrderSubscriptionId())
+                      .build();
+              subscriptionBatchDtos.add(subscriptionBatchDto);
             }
 
-            OrderSubscriptionBatchDto subscriptionBatchDto =
-                OrderSubscriptionBatchDto.builder()
-                    .orderSubscriptionIds(orderSubscriptionIds)
+            SubscriptionBatchDtoList subscriptionBatchDtoList =
+                    SubscriptionBatchDtoList.builder()
+                    .subscriptionBatchDtoList(subscriptionBatchDtos)
                     .build();
 
-            System.out.println("subscriptionList = " + subscriptionBatchDto);
             if (!orderSubscriptionIds.isEmpty()) {
-              kafkaTemplate.send("subscription-batch", subscriptionBatchDto);
+              kafkaTemplate.send("subscription-batch", subscriptionBatchDtoList);
             }
           }
         };

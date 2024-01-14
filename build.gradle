@@ -33,7 +33,7 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.batch:spring-batch-test'
 	testImplementation group: 'com.h2database', name: 'h2'
-	implementation 'io.github.lotteon-maven:blooming-blooms-utils:202401030507'
+	implementation 'io.github.lotteon-maven:blooming-blooms-utils:202401140749'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 
 }
